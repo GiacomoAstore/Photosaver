@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Media Saver</string>
+    <string name="accessibility_service_description">Monitors for ephemeral media in messaging apps to automate saving.</string>
+</resources>
