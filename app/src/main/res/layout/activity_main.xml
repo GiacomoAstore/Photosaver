@@ -90,6 +90,12 @@
         android:layout_height="wrap_content"
         android:text="Open Saved Media Folder"/>
 
+    <Button
+        android:id="@+id/btnOpenDebug"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Open Debug Dashboard"/>
+
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

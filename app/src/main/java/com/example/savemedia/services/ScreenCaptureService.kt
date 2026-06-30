@@ -1,7 +1,10 @@
 package com.example.savemedia.services
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -10,17 +13,30 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.util.DisplayMetrics
 import android.view.WindowManager
+import androidx.core.app.NotificationCompat
+import com.example.savemedia.utils.AppLogger
 import com.example.savemedia.utils.FileManager
+import com.example.savemedia.utils.OptimizedScreenCapture
+import com.example.savemedia.utils.SmartThrottler
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class ScreenCaptureService : Service() {
+
+    @Inject lateinit var fileManager: FileManager
+    @Inject lateinit var logger: AppLogger
+    @Inject lateinit var optimizedCapture: OptimizedScreenCapture
+    @Inject lateinit var throttler: SmartThrottler
 
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
-    private lateinit var fileManager: FileManager
+    private var isCapturing = false
 
     companion object {
         const val ACTION_START_CAPTURE = "com.example.savemedia.START_CAPTURE"
@@ -34,11 +50,6 @@ class ScreenCaptureService : Service() {
     }
 
     private val binder = LocalBinder()
-
-    override fun onCreate() {
-        super.onCreate()
-        fileManager = FileManager(this)
-    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_START_CAPTURE) {
@@ -57,6 +68,12 @@ class ScreenCaptureService : Service() {
     }
 
     fun startCapture(resultCode: Int, data: Intent, appName: String = "Manual") {
+        if (isCapturing) return
+        if (!throttler.shouldCapture()) return
+
+        isCapturing = true
+        startForegroundService()
+
         val mpManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = mpManager.getMediaProjection(resultCode, data)
 
@@ -83,36 +100,45 @@ class ScreenCaptureService : Service() {
         )
 
         imageReader?.setOnImageAvailableListener({ reader ->
-            val image = reader.acquireLatestImage()
-            if (image != null) {
-                val planes = image.planes
-                val buffer = planes[0].buffer
-                val pixelStride = planes[0].pixelStride
-                val rowStride = planes[0].rowStride
-                val rowPadding = rowStride - pixelStride * metrics.widthPixels
-
-                val bitmap = Bitmap.createBitmap(
-                    metrics.widthPixels + rowPadding / pixelStride,
-                    metrics.heightPixels,
-                    Bitmap.Config.ARGB_8888
-                )
-                bitmap.copyPixelsFromBuffer(buffer)
-
-                fileManager.saveBitmap(bitmap, appName)
-
-                image.close()
-                stopCapture()
+            if (isCapturing) {
+                val bitmap = optimizedCapture.captureFrame(reader, metrics.widthPixels, metrics.heightPixels)
+                if (bitmap != null) {
+                    fileManager.saveBitmap(bitmap, appName)
+                    logger.i("Optimized frame captured and saved", "ScreenCapture", mapOf("app" to appName))
+                    stopCapture()
+                }
             }
         }, null)
     }
 
     fun stopCapture() {
+        isCapturing = false
         virtualDisplay?.release()
         virtualDisplay = null
         imageReader?.setOnImageAvailableListener(null, null)
         imageReader = null
         mediaProjection?.stop()
         mediaProjection = null
+    }
+
+    private fun startForegroundService() {
+        val channelId = "ScreenCaptureChannel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Screen Capture", NotificationManager.IMPORTANCE_LOW)
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Capturing Screen")
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(2, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(2, notification)
+        }
     }
 
     override fun onDestroy() {

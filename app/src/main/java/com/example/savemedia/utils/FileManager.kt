@@ -11,8 +11,13 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import javax.inject.Inject
 
-class FileManager(private val context: Context) {
+class FileManager @Inject constructor(
+    private val context: Context,
+    private val sanitizer: DataSanitizer,
+    private val encryption: MediaEncryption
+) {
     private val baseFolder = "MessaggiEffimeri"
 
     fun saveBitmap(bitmap: Bitmap, appName: String): Uri? {
@@ -31,6 +36,7 @@ class FileManager(private val context: Context) {
                 context.contentResolver.openOutputStream(it).use { outputStream ->
                     if (outputStream != null) {
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
+                        // Encryption skipped for gallery visibility, but handled in MediaEncryption utility for sensitive data
                     }
                 }
             }
