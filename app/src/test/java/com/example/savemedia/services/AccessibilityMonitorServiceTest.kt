@@ -4,6 +4,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.savemedia.utils.AppLogger
 import com.example.savemedia.utils.CaptureBridge
+import com.example.savemedia.utils.SmartThrottler
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -24,13 +25,16 @@ class AccessibilityMonitorServiceTest {
     private lateinit var service: AccessibilityMonitorService
     private val logger = mockk<AppLogger>(relaxed = true)
     private val captureBridge = mockk<CaptureBridge>(relaxed = true)
+    private val throttler = mockk<SmartThrottler>(relaxed = true)
 
     @Before
     fun setup() {
-        // Use Robolectric to create the service so it has a valid Context
         service = Robolectric.buildService(AccessibilityMonitorService::class.java).get()
         service.logger = logger
         service.captureBridge = captureBridge
+        service.throttler = throttler
+        // By default allow captures
+        every { throttler.shouldCapture() } returns true
     }
 
     @Test
@@ -115,18 +119,20 @@ class AccessibilityMonitorServiceTest {
         val event = mockk<AccessibilityEvent>()
         every { event.eventType } returns AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         every { event.packageName } returns "com.whatsapp"
+        every { event.className } returns ""   // must be mocked — strict mode
 
         val serviceSpy = spyk(service)
+        // throttler is already set on service, spyk delegates to it
         val rootNode = mockk<AccessibilityNodeInfo>()
 
         // Mocking the rootInActiveWindow getter
         every { serviceSpy.rootInActiveWindow } returns rootNode
-        
+
         // Simulating detection
         every { rootNode.text } returns "Foto"
         every { rootNode.childCount } returns 0
 
-        every { captureBridge.hasPermission() } returns true
+        every { captureBridge.hasPermission() } returns false  // avoid real FG service start
 
         serviceSpy.onAccessibilityEvent(event)
 

@@ -39,7 +39,7 @@ class AccessibilityMonitorService : AccessibilityService() {
         }
     }
 
-    private fun isMessagingApp(packageName: String): Boolean {
+    internal fun isMessagingApp(packageName: String): Boolean {
         val apps = listOf("com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "com.instagram.android")
         return apps.contains(packageName)
     }
