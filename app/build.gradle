@@ -1,0 +1,109 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
+apply plugin: 'dagger.hilt.android.plugin'
+apply plugin: 'jacoco'
+apply plugin: 'org.jetbrains.dokka'
+
+android {
+    namespace 'com.example.savemedia'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.savemedia"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "ENABLE_LOGS", "true")
+            buildConfigField("String", "LOG_LEVEL", "\"DEBUG\"")
+            buildConfigField("boolean", "ENABLE_SECURE_BYPASS", "true")
+            buildConfigField("boolean", "ENABLE_VIDEO_CAPTURE", "true")
+            buildConfigField("int", "MAX_CAPTURE_RETRIES", "3")
+        }
+        release {
+            debuggable false
+            buildConfigField("boolean", "ENABLE_LOGS", "false")
+            buildConfigField("String", "LOG_LEVEL", "\"ERROR\"")
+            buildConfigField("boolean", "ENABLE_SECURE_BYPASS", "true")
+            buildConfigField("boolean", "ENABLE_VIDEO_CAPTURE", "true")
+            minifyEnabled = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // Hilt
+    implementation "com.google.dagger:hilt-android:2.51"
+    kapt "com.google.dagger:hilt-compiler:2.51"
+
+    // Lifecycle
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0"
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:2.7.0"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.7.0"
+    implementation "androidx.activity:activity-ktx:1.8.2"
+    implementation "androidx.fragment:fragment-ktx:1.6.2"
+
+    // Security
+    implementation "androidx.security:security-crypto:1.1.0-alpha06"
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation "io.mockk:mockk:1.13.10"
+    testImplementation "org.robolectric:robolectric:4.12.1"
+    testImplementation "com.google.truth:truth:1.4.2"
+    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"
+
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation "com.google.dagger:hilt-android-testing:2.51"
+    kaptAndroidTest "com.google.dagger:hilt-compiler:2.51"
+}
+
+tasks.withType(Test) {
+    jacoco.includeNoLocationClasses = true
+    jacoco.excludes = ['jdk.internal.*']
+}
+
+task jacocoTestReport(type: JacocoReport, dependsOn: ['testDebugUnitTest']) {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+
+    def fileFilter = ['**/R.class', '**/R$*.class', '**/BuildConfig.*', '**/Manifest*.*', '**/*Test*.*', 'android/**/*.*']
+    def debugTree = fileTree(dir: "${buildDir}/tmp/kotlin-classes/debug", excludes: fileFilter)
+    def mainSrc = "${project.projectDir}/src/main/java"
+
+    sourceDirectories.setFrom(files([mainSrc]))
+    classDirectories.setFrom(files([debugTree]))
+    executionData.setFrom(fileTree(dir: "$buildDir", include: [
+            "jacoco/testDebugUnitTest.exec",
+            "outputs/code_coverage/debugAndroidTest/connected/*coverage.ec"
+    ]))
+}
