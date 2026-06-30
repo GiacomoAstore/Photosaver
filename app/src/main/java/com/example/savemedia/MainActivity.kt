@@ -107,7 +107,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btnStartCapture).setOnClickListener {
-            requestMediaProjection()
+            if (captureBridge.hasPermission()) {
+                // We already have a MediaProjection token — trigger a real capture now
+                Toast.makeText(this, "Capturing screen...", Toast.LENGTH_SHORT).show()
+                val intent = Intent(this, ScreenCaptureService::class.java).apply {
+                    action = ScreenCaptureService.ACTION_START_CAPTURE
+                    putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, captureBridge.resultCode)
+                    putExtra(ScreenCaptureService.EXTRA_DATA, captureBridge.captureIntent)
+                    putExtra(ScreenCaptureService.EXTRA_APP_NAME, "ManualTest")
+                }
+                startForegroundService(intent)
+            } else {
+                // No token yet — request MediaProjection permission first
+                Toast.makeText(this, "Requesting screen capture permission...", Toast.LENGTH_SHORT).show()
+                requestMediaProjection()
+            }
         }
 
         findViewById<Button>(R.id.btnOpenFolder).setOnClickListener {

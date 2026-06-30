@@ -33,9 +33,12 @@ class PermissionManager @Inject constructor(
     fun hasAccessibilityPermission(): Boolean {
         val accessibilityEnabled = Settings.Secure.getInt(context.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 0)
         if (accessibilityEnabled == 1) {
-            val service = "${context.packageName}/com.example.savemedia.services.AccessibilityMonitorService"
+            val serviceName = "${context.packageName}/com.example.savemedia.services.AccessibilityMonitorService"
             val settingValue = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-            return settingValue?.contains(service) == true
+            
+            // Check both full name and simple class name for Samsung compatibility
+            return settingValue?.contains(context.packageName) == true || 
+                   settingValue?.contains("AccessibilityMonitorService") == true
         }
         return false
     }
@@ -56,6 +59,12 @@ class PermissionManager @Inject constructor(
 
     fun requestAccessibilityPermission(activity: Activity) {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        activity.startActivity(intent)
+    }
+
+    fun openAppSettings(activity: Activity) {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        intent.data = Uri.parse("package:${context.packageName}")
         activity.startActivity(intent)
     }
 }

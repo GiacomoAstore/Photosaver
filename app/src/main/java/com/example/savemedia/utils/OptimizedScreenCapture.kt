@@ -8,26 +8,25 @@ import javax.inject.Singleton
 
 @Singleton
 class OptimizedScreenCapture @Inject constructor(
-    private val logger: AppLogger,
-    private val throttler: SmartThrottler
+    private val logger: AppLogger
 ) {
     fun captureFrame(imageReader: ImageReader, width: Int, height: Int): Bitmap? {
-        if (!throttler.shouldCapture()) return null
-
         return try {
-            val image = imageReader.acquireLatestImage() ?: return null
+            val image = imageReader.acquireLatestImage() ?: run {
+                logger.w("acquireLatestImage returned null", "ScreenCapture")
+                return null
+            }
             val bitmap = convertToBitmap(image, width, height)
             image.close()
 
             if (bitmap != null) {
-                throttler.onCaptureSuccess()
+                logger.d("Frame captured successfully: ${bitmap.width}x${bitmap.height}", "ScreenCapture")
             } else {
-                throttler.onCaptureFail()
+                logger.w("convertToBitmap returned null", "ScreenCapture")
             }
             bitmap
         } catch (e: Exception) {
             logger.e("Error capturing frame", e, "ScreenCapture")
-            throttler.onCaptureFail()
             null
         }
     }
@@ -39,13 +38,21 @@ class OptimizedScreenCapture @Inject constructor(
         val rowStride = planes[0].rowStride
         val rowPadding = rowStride - pixelStride * width
 
-        val bitmap = Bitmap.createBitmap(
+        // Create bitmap with padding included (required by copyPixelsFromBuffer)
+        val rawBitmap = Bitmap.createBitmap(
             width + rowPadding / pixelStride,
             height,
             Bitmap.Config.ARGB_8888
         )
-        bitmap.copyPixelsFromBuffer(buffer)
+        rawBitmap.copyPixelsFromBuffer(buffer)
 
-        return bitmap.copy(Bitmap.Config.RGB_565, false)
+        // Crop to actual screen dimensions, removing row padding artifacts
+        return if (rowPadding > 0) {
+            val cropped = Bitmap.createBitmap(rawBitmap, 0, 0, width, height)
+            rawBitmap.recycle()
+            cropped
+        } else {
+            rawBitmap
+        }
     }
 }

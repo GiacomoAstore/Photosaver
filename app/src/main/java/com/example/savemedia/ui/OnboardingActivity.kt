@@ -3,6 +3,7 @@ package com.example.savemedia.ui
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.example.savemedia.R
 import com.example.savemedia.utils.PermissionManager
@@ -34,13 +35,30 @@ class OnboardingActivity : AppCompatActivity() {
             } else if (!permissionManager.hasOverlayPermission()) {
                 permissionManager.requestOverlayPermission(this)
             } else if (!permissionManager.hasAccessibilityPermission()) {
-                permissionManager.requestAccessibilityPermission(this)
+                showAccessibilityGuideDialog()
             }
         }
 
         btnContinue.setOnClickListener {
             finish()
         }
+    }
+
+    private fun showAccessibilityGuideDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Sblocco necessario")
+            .setMessage("Per attivare l'app su Samsung:\n\n" +
+                    "1. Clicca 'VAI ALLE IMPOSTAZIONI'\n" +
+                    "2. Tocca i 3 PUNTINI in alto a destra (⋮)\n" +
+                    "3. Scegli 'Consenti impostazioni limitate'\n" +
+                    "4. Torna nell'app e premi di nuovo GRANT PERMISSIONS per attivare l'Accessibilità.")
+            .setPositiveButton("VAI ALLE IMPOSTAZIONI") { _, _ ->
+                permissionManager.openAppSettings(this)
+            }
+            .setNegativeButton("Annulla") { _, _ ->
+                permissionManager.requestAccessibilityPermission(this)
+            }
+            .show()
     }
 
     override fun onResume() {

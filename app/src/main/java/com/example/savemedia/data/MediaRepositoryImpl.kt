@@ -19,6 +19,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.*
 import javax.inject.Inject
@@ -45,7 +46,8 @@ class MediaRepositoryImpl @Inject constructor(
     override fun observeSavedMedia(): Flow<List<MediaEntity>> = callbackFlow {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                trySend(emptyList()) // Trigger refresh
+                // onChange is a plain callback — must launch a coroutine to call suspend fun
+                launch { trySend(getAllSavedMedia()) }
             }
         }
         context.contentResolver.registerContentObserver(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer)
