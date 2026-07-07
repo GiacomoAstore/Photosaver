@@ -11,10 +11,21 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
+        android:name=".MediaSaverApplication"
         android:allowBackup="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
+
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Module to disable FLAG_SECURE" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="53" />
 
         <activity
             android:name=".MainActivity"
@@ -24,6 +35,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.OnboardingActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.DebugActivity"
+            android:exported="false" />
 
         <service
             android:name=".services.MediaSaveService"
