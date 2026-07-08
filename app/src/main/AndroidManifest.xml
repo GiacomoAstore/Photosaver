@@ -19,6 +19,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
 
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Module to disable FLAG_SECURE" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="53" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -28,8 +38,13 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".ui.OnboardingActivity" />
-        <activity android:name=".ui.DebugActivity" />
+        <activity
+            android:name=".ui.OnboardingActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.DebugActivity"
+            android:exported="false" />
 
         <service
             android:name=".services.MediaSaveService"
