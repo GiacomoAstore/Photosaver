@@ -24,10 +24,8 @@ object AppModule {
     @Singleton
     fun provideFileManager(
         @ApplicationContext context: Context,
-        sanitizer: com.example.savemedia.utils.DataSanitizer,
-        encryption: com.example.savemedia.utils.MediaEncryption,
         logger: AppLogger
-    ): FileManager = FileManager(context, sanitizer, encryption, logger)
+    ): FileManager = FileManager(context, logger)
 
     @Provides
     @Singleton

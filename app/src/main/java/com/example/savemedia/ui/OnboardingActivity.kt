@@ -53,11 +53,9 @@ class OnboardingActivity : AppCompatActivity() {
                     "3. Scegli 'Consenti impostazioni limitate'\n" +
                     "4. Torna nell'app e premi di nuovo GRANT PERMISSIONS per attivare l'Accessibilità.")
             .setPositiveButton("VAI ALLE IMPOSTAZIONI") { _, _ ->
-                permissionManager.openAppSettings(this)
-            }
-            .setNegativeButton("Annulla") { _, _ ->
                 permissionManager.requestAccessibilityPermission(this)
             }
+            .setNegativeButton("Annulla", null)
             .show()
     }
 

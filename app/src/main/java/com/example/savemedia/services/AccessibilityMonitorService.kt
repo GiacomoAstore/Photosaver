@@ -1,12 +1,15 @@
 package com.example.savemedia.services
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Intent
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import com.example.savemedia.domain.capture.UltimateScreenCapture
+import com.example.savemedia.domain.detector.EnhancedContentDetector
+import com.example.savemedia.domain.utils.DiagnosticLogger
+import com.example.savemedia.domain.utils.MLThrottler
 import com.example.savemedia.utils.AppLogger
-import com.example.savemedia.utils.CaptureBridge
-import com.example.savemedia.utils.SmartThrottler
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -14,84 +17,77 @@ import javax.inject.Inject
 class AccessibilityMonitorService : AccessibilityService() {
 
     @Inject lateinit var logger: AppLogger
-    @Inject lateinit var captureBridge: CaptureBridge
-    @Inject lateinit var throttler: SmartThrottler
+    @Inject lateinit var detector: EnhancedContentDetector
+    @Inject lateinit var captureEngine: UltimateScreenCapture
+    @Inject lateinit var throttler: MLThrottler
+    @Inject lateinit var diagnostics: DiagnosticLogger
+
+    private var isMarkerDetected = false
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString() ?: return
         
-        if (isMessagingApp(packageName)) {
-            val className = event.className?.toString() ?: ""
-            logger.i("Event in $packageName: Class=$className Type=${AccessibilityEvent.eventTypeToString(event.eventType)}", "AccessibilityMonitor")
+        if (detector.isTargetApp(packageName)) {
+            val rootNode = rootInActiveWindow
             
-            // Log target for View Once activities
-            if (className.contains("ViewOnce") || className.contains("PhotoView") || className.contains("GalleryPicker")) {
-                logger.i("Detected potential View Once Activity: $className", "AccessibilityMonitor")
-                triggerCapture(packageName)
-                return
+            // Check for marker (e.g., "Foto visualizzabile una volta") in the current view
+            if (detector.hasViewOnceMarker(rootNode)) {
+                if (!isMarkerDetected) {
+                    logger.i("View Once Marker detected in $packageName. Waiting for viewer...", "AccessibilityMonitor")
+                    isMarkerDetected = true
+                }
             }
 
-            val rootNode = rootInActiveWindow ?: return
-            if (detectViewOnce(rootNode, packageName)) {
-                logger.i("!!! DETECTED VIEW ONCE BY TEXT !!! triggering capture for $packageName", "AccessibilityMonitor")
-                triggerCapture(packageName)
+            // Check if the event is a window state change (e.g., opening an Activity)
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                val className = event.className?.toString() ?: ""
+                
+                if (detector.isMediaViewer(packageName, className)) {
+                    if (isMarkerDetected) {
+                        if (throttler.shouldCapture()) {
+                            throttler.onCaptureStarted()
+                            logger.i("!!! VIEWER OPENED - TRIGGERING CAPTURE !!! for $packageName", "AccessibilityMonitor")
+                            
+                            ContextCompat.getMainExecutor(applicationContext).execute {
+                                Toast.makeText(applicationContext, "📸 Cattura automatica attiva: $packageName", Toast.LENGTH_SHORT).show()
+                            }
+                            
+                            captureEngine.captureViaAccessibility(this, packageName)
+                            
+                            // Reset marker detection after capture
+                            isMarkerDetected = false
+                        }
+                    } else {
+                        logger.d("Viewer detected but no marker seen recently in $packageName", "AccessibilityMonitor")
+                    }
+                } else if (isMarkerDetected && !className.contains("Toast") && !className.contains("Popup") && !className.contains("Conversation")) {
+                    // Reset marker if we detect a window change that is NOT the viewer and NOT a conversation
+                    // This helps prevent getting stuck in 'pending' state if user exits the chat
+                    isMarkerDetected = false
+                }
             }
         }
     }
 
-    internal fun isMessagingApp(packageName: String): Boolean {
-        val apps = listOf("com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "com.instagram.android")
-        return apps.contains(packageName)
+    override fun onInterrupt() {
+        logger.w("Accessibility Service Interrupted", "AccessibilityMonitor")
     }
 
-    internal fun detectViewOnce(node: AccessibilityNodeInfo, packageName: String): Boolean {
-        val markers = when (packageName) {
-            "com.whatsapp", "com.whatsapp.w4b" -> listOf("Photo", "Video", "Foto", "Video", "Immagine")
-            "org.telegram.messenger" -> listOf("View Once", "Visualizza una volta", "Photo", "Video")
-            "com.instagram.android" -> listOf("View Once", "Vedi una volta")
-            else -> listOf("Photo", "Video")
-        }
-        return findMarker(node, markers)
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        
+        val info = serviceInfo ?: AccessibilityServiceInfo()
+        info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        info.notificationTimeout = 100
+        info.flags = info.flags or 
+                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                    AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+        
+        this.serviceInfo = info
+
+        logger.i("Strong Mode Accessibility Connected & Configured", "AccessibilityMonitor")
+        diagnostics.logSystemInfo()
     }
-
-    private fun findMarker(n: AccessibilityNodeInfo, markers: List<String>): Boolean {
-        if (n.text != null && markers.any { it.equals(n.text.toString(), ignoreCase = true) }) {
-            // Further refinement: check if the node is visible and potentially full screen
-            return true
-        }
-        for (i in 0 until n.childCount) {
-            val child = n.getChild(i)
-            if (child != null && findMarker(child, markers)) return true
-        }
-        return false
-    }
-
-    internal fun triggerCapture(packageName: String) {
-        // Throttle captures to avoid rapid-fire triggers from multiple accessibility events
-        if (!throttler.shouldCapture()) {
-            logger.d("Capture throttled for $packageName", "AccessibilityMonitor")
-            return
-        }
-
-        if (captureBridge.hasPermission()) {
-            logger.i("Triggering capture for $packageName", "AccessibilityMonitor")
-            throttler.onCaptureStarted()
-            val intent = Intent(this, ScreenCaptureService::class.java).apply {
-                action = ScreenCaptureService.ACTION_START_CAPTURE
-                putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, captureBridge.resultCode)
-                putExtra(ScreenCaptureService.EXTRA_DATA, captureBridge.captureIntent)
-                putExtra(ScreenCaptureService.EXTRA_APP_NAME, packageName)
-            }
-            try {
-                androidx.core.content.ContextCompat.startForegroundService(this, intent)
-            } catch (e: Exception) {
-                logger.e("Failed to start ScreenCaptureService: ${e.message}", e, "AccessibilityMonitor")
-                throttler.onCaptureFail()
-            }
-        } else {
-            logger.w("Cannot trigger capture: MediaProjection permission missing", "AccessibilityMonitor")
-        }
-    }
-
-    override fun onInterrupt() {}
 }

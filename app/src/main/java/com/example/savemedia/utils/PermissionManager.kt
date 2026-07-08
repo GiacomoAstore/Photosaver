@@ -58,8 +58,18 @@ class PermissionManager @Inject constructor(
     }
 
     fun requestAccessibilityPermission(activity: Activity) {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        activity.startActivity(intent)
+        try {
+            // Try to open the specific service settings page directly
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            val componentName = "${context.packageName}/com.example.savemedia.services.AccessibilityMonitorService"
+            intent.putExtra(":settings:show_fragment_args_key", componentName)
+            intent.putExtra(":settings:fragment_args_key", componentName)
+            activity.startActivity(intent)
+        } catch (e: Exception) {
+            // Fallback to general accessibility settings
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            activity.startActivity(intent)
+        }
     }
 
     fun openAppSettings(activity: Activity) {

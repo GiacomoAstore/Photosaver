@@ -68,7 +68,7 @@ class MediaRepositoryImpl @Inject constructor(
             MediaStore.Images.Media.SIZE
         )
         val selection = "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?"
-        val selectionArgs = arrayOf("%MessaggiEffimeri%")
+        val selectionArgs = arrayOf("%MediaSaver%")
         val sortOrder = "${MediaStore.Images.Media.DATE_TAKEN} DESC"
 
         try {
