@@ -101,11 +101,30 @@ class ScreenCaptureService : Service() {
 
         imageReader?.setOnImageAvailableListener({ reader ->
             if (isCapturing) {
-                val bitmap = optimizedCapture.captureFrame(reader, metrics.widthPixels, metrics.heightPixels)
-                if (bitmap != null) {
-                    fileManager.saveBitmap(bitmap, appName)
-                    logger.i("Optimized frame captured and saved", "ScreenCapture", mapOf("app" to appName))
-                    stopCapture()
+                val image = reader.acquireLatestImage()
+                if (image != null) {
+                    val planes = image.planes
+                    val buffer = planes[0].buffer
+                    val pixelStride = planes[0].pixelStride
+                    val rowStride = planes[0].rowStride
+                    val rowPadding = rowStride - pixelStride * metrics.widthPixels
+
+                    val bitmap = Bitmap.createBitmap(
+                        metrics.widthPixels + rowPadding / pixelStride,
+                        metrics.heightPixels,
+                        Bitmap.Config.ARGB_8888
+                    )
+                    bitmap.copyPixelsFromBuffer(buffer)
+
+                    // Simple check if bitmap is black (placeholder for more advanced detection)
+                    if (!isBitmapBlack(bitmap)) {
+                        fileManager.saveBitmap(bitmap, appName)
+                        logger.i("Frame captured and saved", "ScreenCapture", mapOf("app" to appName))
+                        image.close()
+                        stopCapture()
+                    } else {
+                        image.close()
+                    }
                 }
             }
         }, null)
@@ -139,6 +158,13 @@ class ScreenCaptureService : Service() {
         } else {
             startForeground(2, notification)
         }
+    }
+
+    private fun isBitmapBlack(bitmap: Bitmap): Boolean {
+        // Sample a few pixels to check if they are all black
+        val pixels = IntArray(10)
+        bitmap.getPixels(pixels, 0, 1, bitmap.width / 2, bitmap.height / 2, 1, 10)
+        return pixels.all { it == 0xFF000000.toInt() || it == 0 }
     }
 
     override fun onDestroy() {
